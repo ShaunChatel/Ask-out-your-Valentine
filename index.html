@@ -17,9 +17,7 @@
       );
     }
 
-    .bounce2 {
-      animation: bounce2 2s ease infinite;
-    }
+    .bounce2 { animation: bounce2 2s ease infinite; }
 
     @keyframes bounce2 {
       0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
@@ -38,28 +36,13 @@
       transition: transform 0.15s ease-out;
       will-change: transform;
     }
-
-    /* Smooth scaling for the Yes button */
-    .yes-grow {
-      transition: transform 0.15s ease-out, font-size 0.15s ease-out;
-      transform-origin: center;
-      will-change: transform;
-      position: relative;
-      z-index: 10; /* sit above other elements when it grows */
-    }
-
-    /* Keep buttons container from forcing horizontal overflow */
-    #responseButtons {
-      width: 100%;
-      max-width: 420px;
-      overflow: visible; /* allow scaled button to spill visually */
-    }
   </style>
 </head>
 
+<!-- overflow-x-hidden ensures NO horizontal scroll even if the Yes button becomes huge -->
 <body class="gradient-background overflow-x-hidden">
   <div class="flex items-center justify-center min-h-screen">
-    <div class="flex flex-col items-center p-4 w-full overflow-visible">
+    <div class="flex flex-col items-center p-4 w-full">
       <img
         id="imageDisplay"
         src="./images/image1.gif"
@@ -75,21 +58,17 @@
         Alexe, voudrais-tu être ma valentine ce samedi 14 février? 🙈
       </h2>
 
-      <!-- Buttons container: wraps on small screens, but allows visual overflow from scaling -->
-      <div
-        class="flex flex-wrap justify-center gap-4 pt-[20px] items-center overflow-visible"
-        id="responseButtons"
-      >
+      <div class="flex flex-wrap justify-center gap-4 pt-[20px] items-center" id="responseButtons">
         <button
           id="yesButton"
-          class="bounce2 yes-grow inline-flex items-center justify-center whitespace-nowrap rounded-md text-[20px] font-medium disabled:pointer-events-none disabled:opacity-50 hover:bg-green-400 min-h-12 min-w-[75px] px-4 py-2 bg-green-500 text-white"
+          class="bounce2 inline-flex items-center justify-center whitespace-nowrap rounded-md text-[20px] font-medium hover:bg-green-400 min-h-12 min-w-[75px] px-4 py-2 bg-green-500 text-white"
         >
           Oui
         </button>
 
         <button
           id="noButton"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-[20px] font-medium transition disabled:pointer-events-none disabled:opacity-50 hover:bg-red-700 h-12 min-w-[75px] w-auto px-4 py-2 bg-red-500 text-white"
+          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-[20px] font-medium transition hover:bg-red-700 h-12 min-w-[75px] w-auto px-4 py-2 bg-red-500 text-white"
         >
           Non
         </button>
@@ -118,97 +97,81 @@
       "./images/image7.gif",
     ];
 
-    // Escaping movement: stronger the more she clicks "No"
+    // --- NO button escape (after 2 clicks) ---
     function moveNoButton() {
-      const intensity = Math.min(220, 60 + noClickCount * 35);
+      const intensity = Math.min(240, 70 + noClickCount * 40);
       const x = (Math.random() - 0.5) * intensity;
       const y = (Math.random() - 0.5) * intensity;
       noButton.style.transform = `translate(${x}px, ${y}px)`;
     }
 
-    // Grow YES on mobile too, but clamp so it never forces horizontal scroll.
-    // Important: scaling doesn't change layout width, but we still clamp based on viewport
-    // so the visual size doesn't look ridiculous.
-    function updateYesEmphasis() {
-      const baseFont = 20;
-      const baseScale = 1;
+    noButton.addEventListener("mouseenter", () => {
+      if (noClickCount >= 2) moveNoButton();
+    });
 
-      // Get current viewport width and the button's *layout* width (unscaled)
-      const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-      const rect = yesButton.getBoundingClientRect();
-      const baseWidth = rect.width; // this includes current transform, so reset first to measure cleanly
+    noButton.addEventListener("touchstart", () => {
+      if (noClickCount >= 2) moveNoButton();
+    });
 
-      // Temporarily reset transform to measure true base width
-      const prevTransform = yesButton.style.transform;
-      yesButton.style.transform = "scale(1)";
-      const cleanRect = yesButton.getBoundingClientRect();
-      const cleanWidth = cleanRect.width;
-      yesButton.style.transform = prevTransform;
+    // --- YES button: GET HUGE but stay clickable and on-screen ---
+    // Strategy:
+    // 1) Use position: fixed so it stays in the viewport and doesn't push layout.
+    // 2) Use transform: scale(...) so it can become massive.
+    // 3) Keep it centered with left/top 50% and translate(-50%,-50%).
+    // 4) overflow-x-hidden on body prevents horizontal scrolling.
+    function updateYesButton() {
+      // Go big. Like, BIG.
+      const scale = 1 + noClickCount * 0.75; // 0.75 per click is a lot
+      const font = 20 + noClickCount * 10;   // big font growth too
 
-      // We allow the YES button to grow close to the screen edge (no padding),
-      // but we must avoid creating horizontal scrolling.
-      const maxVisualWidth = vw * 0.98; // allow almost full width
+      // After first "No", make it float centered in the viewport so it never goes off-screen
+      if (noClickCount >= 1) {
+        yesButton.style.position = "fixed";
+        yesButton.style.left = "50%";
+        yesButton.style.top = "72%"; // lower half so it doesn't cover the question too much
+        yesButton.style.zIndex = "9999";
+        yesButton.style.transformOrigin = "center";
+        yesButton.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      } else {
+        // initial state
+        yesButton.style.position = "";
+        yesButton.style.left = "";
+        yesButton.style.top = "";
+        yesButton.style.zIndex = "";
+        yesButton.style.transform = "";
+      }
 
-      // Desired scale grows each click
-      const desiredScale = baseScale + noClickCount * 0.28;
-
-      // Clamp scale so scaled button stays within viewport visually
-      const maxScaleByWidth = cleanWidth > 0 ? (maxVisualWidth / cleanWidth) : desiredScale;
-      const finalScale = Math.min(desiredScale, maxScaleByWidth);
-
-      yesButton.style.transform = `scale(${finalScale})`;
-
-      // Font size grows too (clamped so it doesn't look broken)
-      const desiredFont = baseFont + noClickCount * 4;
-      const maxFont = 42;
-      yesButton.style.fontSize = `${Math.min(desiredFont, maxFont)}px`;
+      yesButton.style.fontSize = `${font}px`;
+      yesButton.style.boxShadow = "0 10px 30px rgba(0,0,0,0.2)";
     }
 
-    // Desktop: dodge cursor after 2 "No" clicks
-    noButton.addEventListener("mouseenter", () => {
-      if (noClickCount >= 2) {
-        noButton.classList.add("escape");
-        moveNoButton();
-      }
-    });
-
-    // Mobile: dodge touch after 2 "No" clicks
-    noButton.addEventListener("touchstart", () => {
-      if (noClickCount >= 2) {
-        noButton.classList.add("escape");
-        moveNoButton();
-      }
-    });
+    // Keep it stable if orientation changes
+    window.addEventListener("resize", updateYesButton);
 
     noButton.addEventListener("click", function () {
-      // Reset position so click always registers
+      // Let the "No" click still work + reset its position (so it's always clickable)
       noButton.style.transform = "translate(0, 0)";
 
       if (noClickCount < 5) {
         noClickCount++;
         imageDisplay.src = imagePaths[noClickCount];
 
-        // Emphasize YES without causing horizontal scroll
-        updateYesEmphasis();
+        // Update YES emphasis every click
+        updateYesButton();
 
-        if (noClickCount < 6) {
-          noButton.textContent = [
-            "Non..",
-            "T'es sûre?",
-            "Sûre et certaine?",
-            "Genre full de sûre là?",
-            "A yoye",
-            "N'importe quoi..",
-          ][noClickCount];
-        }
+        noButton.textContent = [
+          "Non..",
+          "T'es sûre?",
+          "Sûre et certaine?",
+          "Genre full de sûre là?",
+          "A yoye",
+          "N'importe quoi..",
+        ][noClickCount];
       }
     });
 
     // Initialize
-    updateYesEmphasis();
-
-    // Re-apply on resize/orientation change
-    window.addEventListener("resize", updateYesEmphasis);
+    updateYesButton();
 
     yesButton.addEventListener("click", () => {
       imageDisplay.src = "./images/image7.gif";

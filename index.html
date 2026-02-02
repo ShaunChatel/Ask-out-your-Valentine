@@ -41,22 +41,25 @@
 
     /* Smooth scaling for the Yes button */
     .yes-grow {
-      transition: transform 0.15s ease-out;
+      transition: transform 0.15s ease-out, font-size 0.15s ease-out;
       transform-origin: center;
       will-change: transform;
+      position: relative;
+      z-index: 10; /* sit above other elements when it grows */
     }
 
-    /* Keep buttons from ever forcing layout wider than viewport */
+    /* Keep buttons container from forcing horizontal overflow */
     #responseButtons {
       width: 100%;
-      max-width: 420px; /* nice on desktop too */
+      max-width: 420px;
+      overflow: visible; /* allow scaled button to spill visually */
     }
   </style>
 </head>
 
 <body class="gradient-background overflow-x-hidden">
   <div class="flex items-center justify-center min-h-screen">
-    <div class="flex flex-col items-center p-4 w-full">
+    <div class="flex flex-col items-center p-4 w-full overflow-visible">
       <img
         id="imageDisplay"
         src="./images/image1.gif"
@@ -72,14 +75,14 @@
         Alexe, voudrais-tu être ma valentine ce samedi 14 février? 🙈
       </h2>
 
-      <!-- Buttons container: wraps on small screens, stays centered -->
+      <!-- Buttons container: wraps on small screens, but allows visual overflow from scaling -->
       <div
-        class="flex flex-wrap justify-center gap-4 pt-[20px] items-center"
+        class="flex flex-wrap justify-center gap-4 pt-[20px] items-center overflow-visible"
         id="responseButtons"
       >
         <button
           id="yesButton"
-          class="bounce2 yes-grow inline-flex items-center justify-center whitespace-nowrap rounded-md text-[20px] font-medium disabled:pointer-events-none disabled:opacity-50 hover:bg-green-400 min-h-12 min-w-[75px] px-4 py-2 bg-green-500 text-white transition"
+          class="bounce2 yes-grow inline-flex items-center justify-center whitespace-nowrap rounded-md text-[20px] font-medium disabled:pointer-events-none disabled:opacity-50 hover:bg-green-400 min-h-12 min-w-[75px] px-4 py-2 bg-green-500 text-white"
         >
           Oui
         </button>
@@ -117,28 +120,48 @@
 
     // Escaping movement: stronger the more she clicks "No"
     function moveNoButton() {
-      const intensity = Math.min(200, 60 + noClickCount * 30);
+      const intensity = Math.min(220, 60 + noClickCount * 35);
       const x = (Math.random() - 0.5) * intensity;
       const y = (Math.random() - 0.5) * intensity;
       noButton.style.transform = `translate(${x}px, ${y}px)`;
     }
 
-    // Grow emphasis on YES without affecting layout width:
-    // Use transform: scale() instead of changing width/height.
+    // Grow YES on mobile too, but clamp so it never forces horizontal scroll.
+    // Important: scaling doesn't change layout width, but we still clamp based on viewport
+    // so the visual size doesn't look ridiculous.
     function updateYesEmphasis() {
-      // scale grows with clicks, capped so it doesn't get absurd
-      const scale = Math.min(2.2, 1 + noClickCount * 0.25);
+      const baseFont = 20;
+      const baseScale = 1;
 
-      // On small screens, cap a bit lower to avoid overlap
-      const isMobile = window.matchMedia("(max-width: 640px)").matches;
-      const finalScale = isMobile ? Math.min(scale, 1.8) : scale;
+      // Get current viewport width and the button's *layout* width (unscaled)
+      const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+      const rect = yesButton.getBoundingClientRect();
+      const baseWidth = rect.width; // this includes current transform, so reset first to measure cleanly
+
+      // Temporarily reset transform to measure true base width
+      const prevTransform = yesButton.style.transform;
+      yesButton.style.transform = "scale(1)";
+      const cleanRect = yesButton.getBoundingClientRect();
+      const cleanWidth = cleanRect.width;
+      yesButton.style.transform = prevTransform;
+
+      // We allow the YES button to grow close to the screen edge (no padding),
+      // but we must avoid creating horizontal scrolling.
+      const maxVisualWidth = vw * 0.98; // allow almost full width
+
+      // Desired scale grows each click
+      const desiredScale = baseScale + noClickCount * 0.28;
+
+      // Clamp scale so scaled button stays within viewport visually
+      const maxScaleByWidth = cleanWidth > 0 ? (maxVisualWidth / cleanWidth) : desiredScale;
+      const finalScale = Math.min(desiredScale, maxScaleByWidth);
 
       yesButton.style.transform = `scale(${finalScale})`;
 
-      // Optional: increase font a bit too (still doesn't change layout much)
-      const font = Math.min(34, 20 + noClickCount * 4);
-      const finalFont = isMobile ? Math.min(font, 28) : font;
-      yesButton.style.fontSize = `${finalFont}px`;
+      // Font size grows too (clamped so it doesn't look broken)
+      const desiredFont = baseFont + noClickCount * 4;
+      const maxFont = 42;
+      yesButton.style.fontSize = `${Math.min(desiredFont, maxFont)}px`;
     }
 
     // Desktop: dodge cursor after 2 "No" clicks
@@ -165,7 +188,7 @@
         noClickCount++;
         imageDisplay.src = imagePaths[noClickCount];
 
-        // Emphasize YES without breaking mobile width
+        // Emphasize YES without causing horizontal scroll
         updateYesEmphasis();
 
         if (noClickCount < 6) {
@@ -181,10 +204,10 @@
       }
     });
 
-    // Initialize emphasis (click count 0)
+    // Initialize
     updateYesEmphasis();
 
-    // Re-apply on resize/orientation change (important on phones)
+    // Re-apply on resize/orientation change
     window.addEventListener("resize", updateYesEmphasis);
 
     yesButton.addEventListener("click", () => {
